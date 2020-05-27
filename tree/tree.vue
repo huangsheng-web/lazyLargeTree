@@ -4,14 +4,22 @@
       v-show="!filterable"
       @node-click="nodeTap"
       :props="props"
+      :node-key="nodeKey"
       :data="store.data"
+      :showCheckbox="showCheckbox"
+      :highlightConfig="highlightConfig"
       :parent="this">
          <template v-slot="{row}"><slot :row="row"></slot></template>
     </hs-tree-node>
     <div class="hs-tree-filter" v-show="filterable">
       <template v-if="store.filterData && store.filterData.length">
-        <p @click="nodeTap($event, item)" v-for="(item, index) in store.filterData" :key="'hs-tree-filter' + index">
-          <slot :row="item">{{item[props.label]}}</slot>
+        <p @click="nodeTap($event, item)" :style="{'--bg': highlightConfig.bg, '--color': highlightConfig.color}" :class="{'hs-tree-highlight-label': item === focusItem}" v-for="(item, index) in store.filterData" :key="'hs-tree-filter' + index">
+          <span v-show="showCheckbox" class="hs-tree-checkbox">
+            <el-checkbox v-model="item.checked"></el-checkbox>
+          </span>
+          <span>
+            <slot :row="item">{{item[props.label]}}</slot>
+          </span>
         </p>
       </template>
       <div class="hs-tree-empty" style="padding: 10px 0;" v-else>暂无数据</div>
@@ -20,13 +28,32 @@
 </template>
 <script>
   /**
-  * node-click 是节点被点击的事件，包含来个参数，event, data
-  * filter-node-method 查找过滤方法，使用$ref.tree.filter(),之后回调，
-  * 如果没有传入过滤method，默认只匹配最底层节点数据
-  * :props="defaultPorps" 默认的label,跟children字段
-  * <template v-slot="{ row }"></template>插入自定义模板，row为当前节点data
-  * mathDelayTime 滚动事件的节流延时时间.默认为1000ms，时间越短，计算负荷越大
-  *
+   * props 传参 {
+   *        node-click 是节点被点击的事件，包含来个参数，event, data
+   *        filter-node-method 查找过滤方法，使用$ref.tree.filter(),之后回调，
+   *        如果没有传入过滤method，默认只匹配最底层节点数据
+   *        :props="defaultPorps" 默认的label,跟children字段
+   *        mathDelayTime 滚动事件的节流延时时间.默认为1000ms，时间越短，计算负荷越大
+   *        highlightConfig对高亮节点的色彩配置，bg背景颜色,color字体颜色
+   *    }
+   *  attribute传参 {
+   *        icon-class 自定义树节点的图标 默认为el-icon-caret-right
+   *        showCheckbox 是否展示checkbox，默认为false
+   *        node-key	每个树节点用来作为唯一标识的属性，整棵树应该是唯一的
+   *   }
+   *  模板插入 {
+   *        <template v-slot="{ row }"></template>插入自定义模板，row为当前节点data
+   *  }
+   *  methods {
+   *      setCheckedKeys 通过 keys 设置目前勾选的节点，使用此方法必须设置 node-key 属性
+   *      getHalfCheckedKeys 返回目前半选中的节点的 key 所组成的数组，使用此方法必须设置 node-key 属性
+   *      getCheckedKeys 返回目前被选中的节点的 key 所组成的数组，使用此方法必须设置 node-key 属性
+   *      getHalfCheckedDatas 返回目前半选中的节点的 data 所组成的数组，使用此方法必须设置 node-key 属性
+   *      getCheckedDatas 返回目前被选中的节点的 data 所组成的数组，使用此方法必须设置 node-key 属性
+   *  }
+   *
+   *
+   *
    * 说明：
    * 传入的原始数据，组件会自动给加入某些字段例：（isExpand, isNeedShow...）
    * 并没有对原始数据进行封装重构，降低性能消耗
@@ -57,6 +84,21 @@
         }
       },
       filterNodeMethod: Function,
+      iconClass: String,
+      showCheckbox: {
+        type: Boolean,
+        default: false
+      },
+      // 高亮的配置，默认为文档自身颜色
+      highlightConfig: {
+        default() {
+          return {
+            bg: '#FFFFFF',
+            color: '#606266'
+          }
+        }
+      },
+      nodeKey: String
     },
     data() {
       return {
@@ -69,6 +111,7 @@
         treeId: 'hsTree' + Math.ceil(Math.random() * 100000000),
         startIndex: 0, // 开始渲染的索引，
         indexRange: 0, // 渲染的范围
+        focusItem: null, // 当前高亮的节点
       }
     },
     watch: {
@@ -83,7 +126,7 @@
       this.scrollEventListen();
     },
     methods: {
-      /*
+      /**
       * 滚动事件，动态加载可视区域内的数据
       * rules {
       *  节点未展开，直接拉进来因为子集不会渲染
@@ -158,6 +201,7 @@
       * */
       nodeTap(ev, data) {
         this.$emit('node-click', ev, data);
+        this.focusItem = data;
         // 只有点击的节点存在子集并不为空的时候才需要执行计算
         if (data[this.props['children']] && data[this.props['children']].length) {
           this.todoMath();
@@ -167,6 +211,8 @@
       * 过滤事件
       * 如果用户有自定义传filter-method,那么使用该方法过滤，
       * 否则默认匹配节点的label
+      * val不存在的时候，取消过滤这时应该判断，如果有showCheckbox
+      * 那么应该进行setCheckedKeys操作，响应到父级和子级
       * */
       filter(val) {
         if (val) {
@@ -176,6 +222,13 @@
           this.todoMath();
         } else {
           this.filterable = false;
+          // 找出store下filterData下checked节点
+          let fArr = [];
+           this.filterAllData.forEach(x => {
+            if (x.checked) fArr.push(x[this.nodeKey])
+          })
+          this.setCheckedKeys(fArr);
+          fArr = null;
         }
       },
       /**
@@ -205,15 +258,113 @@
             this.filterNodeChildren(x[this.props['children']], keywords)
           }
         })
+      },
+      /**
+       * 设置checkedKey的方法
+       * */
+      setCheckedKeys(data) {
+        if (!this.nodeKey) this.nodeKeyError();
+        let isArray = data instanceof Array;
+        if (!isArray) this.nodeKeyError("arguments should be Array but accepted " + `${typeof data}`);
+        /**
+         * setCheckedKeys方法里抽离的$set方法
+         * */
+        const setAttr = (obj, attr, boolean) => {
+          typeof obj[attr] !== 'undefined' ?
+              obj[attr] = boolean :
+              this.$set(obj, attr, boolean);
+        }
+        // 类型跟node-key对了，接下来设置自定义选中的节点
+        const todoEach = (arr, parent) => {
+          arr.forEach(x => {
+            if (data.includes(x[this.nodeKey])) {
+              setAttr(x, 'checked', true);
+              if (x[this.props['children']] && x[this.props['children']].length) {
+                x[this.props['children']].forEach(y => setAttr(y, 'checked', true))
+              }
+            }
+            if (x[this.props['children']] && x[this.props['children']].length) {
+              todoEach(x[this.props['children']], x)
+            }
+          })
+          // 设置完所有选中的节点，还需要进行indeterminate计算
+          if (arr.length && arr.findIndex(x => !x.checked) === -1) {
+            // 所有子节点都为选中
+            if (parent) setAttr(parent, 'checked', true)
+          } else if (arr.length && arr.findIndex(x => x.checked || x.indeterminate) !== -1) {
+            // 子节点有选中的或者有半选的
+            if (parent) setAttr(parent, 'indeterminate', true)
+          }
+        }
+        todoEach(this.data);
+      },
+      /**
+       * 获取keys,或者node
+       * 公共抽离方法
+       * */
+      getItemToArray(type) {
+        let res = {halfKeys: [], keys: [], halfNodes: [], nodes: []}
+        const todoFor = (arr) => {
+          arr.forEach(x => {
+            if (x['checked']) {
+              res.nodes.push(x);
+              res.keys.push(x[this.nodeKey])
+            }
+            if (x['indeterminate']) {
+              res.halfNodes.push(x);
+              res.halfKeys.push(x[this.nodeKey])
+            }
+            if (x[this.props['children']] && x[this.props['children']].length) {
+              todoFor(x[this.props['children']])
+            }
+          })
+        }
+        todoFor(this.data);
+        return res[type]
+      },
+      /**
+       * 获取半选状态的节点key集合
+       * */
+      getHalfCheckedKeys() {
+        if (!this.nodeKey) this.nodeKeyError();
+        return this.getItemToArray('halfKeys');
+      },
+      /**
+       * 获取选中状态的节点key集合
+       * */
+      getCheckedKeys() {
+        if (!this.nodeKey) this.nodeKeyError();
+        return this.getItemToArray('keys');
+      },
+      /**
+       * 获取半选状态的节点data集合
+       * */
+      getHalfCheckedNodes() {
+        if (!this.nodeKey) this.nodeKeyError();
+        return this.getItemToArray('halfNodes');
+      },
+      /**
+       * 获取选中状态的节点data集合
+       * */
+      getCheckedNodes() {
+        if (!this.nodeKey) this.nodeKeyError();
+        return this.getItemToArray('nodes');
+      },
+      /**
+       * 没有设置node-key，调用跟node-key相关方法抛异常
+       * */
+      nodeKeyError(str) {
+        throw new Error(str ? str : "you must set node-key in props")
       }
     },
   }
 </script>
-<style scoped="scoped" lang="scss">
+<style lang="scss">
   .hs-tree {
     width: 100%;
     height: 100%;
     overflow: auto;
+    background: var(--bg-color);
     /*overflow-x: hidden;*/
     position: relative;
     &::-webkit-scrollbar {/*滚动条整体样式*/
@@ -235,13 +386,22 @@
       text-align: center;
     }
     .hs-tree-filter {
+      color: #606266;
       p {
-        padding-left: 20px;
+        padding-left: 18px;
         height: 26px;
         line-height: 26px;
         cursor: pointer;
-        color: #606266;
+        display: flex;
+        align-items: flex-end;
+        > span {
+          padding: 0 3px;
+        }
       }
+    }
+    .hs-tree-highlight-label {
+      background-color: var(--bg);
+      color: var(--color);
     }
   }
 </style>
