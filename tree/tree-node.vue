@@ -4,15 +4,24 @@
       <template v-for="(item, index) in treeData">
         <!--判断是否在可视范围-->
         <div class="hs-tree-main" v-if="item.isNeedShow" :key="'hs-tree-node' + index">
-          <div class="hs-tree-label" @click="nodeClick($event, item)">
+          <div
+              class="hs-tree-label"
+              :style="{'--bg': highlightConfig.bg, '--color': highlightConfig.color}"
+              :class="{'hs-tree-highlight-label': item === parent.focusItem}"
+          >
             <span
               :class="[
                 'hs-tree-arrow',
-                {'is-expand': item.isExpand, 'is-current': item.isFocus, 'el-icon-caret-right': item[props.children] && item[props.children].length}
+                {'is-expand': item.isExpand}
               ]"
+              @click.stop="nodeClick($event, item)"
             >
+              <i v-show="item[props.children] && item[props.children].length" :class="parent.iconClass ? parent.iconClass : 'el-icon-caret-right'"></i>
             </span>
-            <span>
+            <span v-show="showCheckbox" class="hs-tree-checkbox">
+              <el-checkbox @change="handleChange($event, item, checkboxParent)" v-model="item.checked" :indeterminate="item.indeterminate"></el-checkbox>
+            </span>
+            <span  @click.stop="nodeClick($event, item)">
               <slot :row="item">{{item[props.label]}}</slot>
             </span>
           </div>
@@ -22,6 +31,10 @@
                     :data="item[props.children]"
                     :parent="parent"
                     :props="props"
+                    :highlightConfig="highlightConfig"
+                    :showCheckbox="showCheckbox"
+                    :checkboxParent="item"
+                    @handleChange="handleChange"
             >
               <template v-slot="{row}"><slot :row="row"></slot></template>
             </hs-tree-node>
@@ -52,7 +65,20 @@
             label: 'label',
           };
         }
-      }
+      },
+      highlightConfig: {
+        default() {
+          return {
+            bg: '#FFFFFF',
+            color: '#606266'
+          }
+        }
+      },
+      showCheckbox: {
+        type: Boolean,
+        default: false
+      },
+      checkboxParent: null,
     },
     data() {
       return {
@@ -62,7 +88,7 @@
     watch: {
       data() {
         this.treeData = this.data;
-      }
+      },
     },
     created() {
       this.treeData = this.data;
@@ -76,7 +102,65 @@
           typeof data['isExpand'] !== 'undefined' ? data['isExpand'] = !data['isExpand'] : this.$set(data, 'isExpand', true);
         }
         this.parent._self.nodeTap(ev, data);
-      }
+      },
+      /**
+       * 当前节点checkbox状态变化
+       * 如果当前组件checkboxParent不存在，说明为最顶级菜单
+       * 否则往上延伸改变父级checked状态
+       * 这样只会计算受影响的节点，降低计算量
+       * 存在子节点是，只延伸设置子节点checked
+       * 不会重复计算影响父节点。
+       * */
+      handleChange(ev, data, checkboxParent) {
+        /**
+         * handleChange方法里抽离的$set方法
+         * */
+        const setAttr = (obj, attr, boolean) => {
+          typeof obj[attr] !== 'undefined' ?
+              obj[attr] = boolean :
+              this.$set(obj, attr, boolean);
+        }
+        /**
+         * 处理当前节点，当前节点被触发了，indeterminate必定为false
+         * */
+        setAttr(data, 'indeterminate', false);
+        /**
+         * 处理父级数据
+         * */
+        if (checkboxParent) {
+          let parentBool = false;
+          // 如果子集全选，则自身全选为true，半选为false;
+          if (checkboxParent[this.props['children']].findIndex(x => !x.checked) === -1) {
+            parentBool = true;
+            setAttr(checkboxParent, 'indeterminate', false)
+          } else {
+            parentBool = false;
+            // 说明有存在半选的子集，
+            if (
+                checkboxParent[this.props['children']].findIndex(x => x.indeterminate || x.checked) !== -1
+            ) {
+              setAttr(checkboxParent, 'indeterminate', true)
+            } else {
+              setAttr(checkboxParent, 'indeterminate', false)
+            }
+          }
+          setAttr(checkboxParent, 'checked', parentBool);
+          // 说明存在还存在父级，需要继续向上延伸执行handleChange
+          this.$emit('handleChange', false, {}, this.checkboxParent)
+        }
+        /**
+         * 处理子集数据
+         * */
+        if (data && data[this.props['children']]) {
+         data[this.props['children']].forEach(x => {
+           typeof x['checked'] !== 'undefined' ? x['checked'] = ev : this.$set(x, 'checked', ev);
+           // 如果子节点还存在子节点，那么向下延伸执行handleChange
+           if (x[this.props['children']] && x[this.props['children']].length) {
+             this.handleChange(ev, x)
+           }
+         })
+        }
+      },
     },
   }
 </script>
@@ -93,6 +177,7 @@
       display: flex;
       height: 26px;
       line-height: 26px;
+      align-items: flex-end;
       .hs-tree-arrow {
         width: 20px;
         height: 26px;
@@ -111,12 +196,17 @@
           transform: rotate(90deg);
         }
       }
+      .hs-tree-checkbox {
+        width: 20px;
+        text-align: center;
+      }
       &:hover {
         background-color: #f5f7fa;
       }
     }
+
     .hs-tree-content {
-      padding-left: 20px;
+      padding-left: 18px;
     }
   }
   .hs-tree-empty {
