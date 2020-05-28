@@ -124,6 +124,7 @@
       // 预留当前盒子的2倍高度来加载数据
       this.indexRange = Math.ceil(document.getElementById(this.treeId).clientHeight / 26 * 1.4);
       this.scrollEventListen();
+      this.todoMath();
     },
     methods: {
       /**
