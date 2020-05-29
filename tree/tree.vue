@@ -248,8 +248,7 @@
               this.filterAllData.push(x)
             }
           } else {
-            if (!x[this.props['children']] ||
-                !x[this.props['children']].length &&
+            if (!x[this.props['children']] &&
                 x[this.props['label']].indexOf(keywords) !== -1)
             {
               this.filterAllData.push(x)
