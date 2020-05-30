@@ -1,15 +1,15 @@
 <template>
   <div class="hs-tree" :id="treeId">
     <hs-tree-node
-      v-show="!filterable"
-      @node-click="nodeTap"
-      :props="props"
-      :node-key="nodeKey"
-      :data="store.data"
-      :showCheckbox="showCheckbox"
-      :highlightConfig="highlightConfig"
-      :parent="this">
-         <template v-slot="{row}"><slot :row="row"></slot></template>
+            v-show="!filterable"
+            @node-click="nodeTap"
+            :props="props"
+            :node-key="nodeKey"
+            :data="store.data"
+            :showCheckbox="showCheckbox"
+            :highlightConfig="highlightConfig"
+            :parent="this">
+      <template v-slot="{row}"><slot :row="row"></slot></template>
     </hs-tree-node>
     <div class="hs-tree-filter" v-show="filterable">
       <template v-if="store.filterData && store.filterData.length">
@@ -27,7 +27,7 @@
   </div>
 </template>
 <script>
-  /**
+  /*
    * props 传参 {
    *        node-click 是节点被点击的事件，包含来个参数，event, data
    *        filter-node-method 查找过滤方法，使用$ref.tree.filter(),之后回调，
@@ -57,7 +57,7 @@
    * 说明：
    * 传入的原始数据，组件会自动给加入某些字段例：（isExpand, isNeedShow...）
    * 并没有对原始数据进行封装重构，降低性能消耗
-  * */
+   */
   import HsTreeNode from './tree-node.vue';
   export default {
     components: {HsTreeNode},
@@ -122,12 +122,14 @@
     mounted() {
       // 根据当前盒子高度计算indexRange,
       // 预留当前盒子的2倍高度来加载数据
-      this.indexRange = Math.ceil(document.getElementById(this.treeId).clientHeight / 26 * 1.4);
+      this.indexRange = Math.ceil(document.getElementById(this.treeId).clientHeight / 26 * 1.4) ?
+          Math.ceil(document.getElementById(this.treeId).clientHeight / 26 * 1.4) :
+          20;
       this.scrollEventListen();
       this.todoMath();
     },
     methods: {
-      /**
+      /*
       * 滚动事件，动态加载可视区域内的数据
       * rules {
       *  节点未展开，直接拉进来因为子集不会渲染
@@ -149,18 +151,18 @@
                 document.getElementById(_this.treeId).scrollTop +
                 document.getElementById(_this.treeId).clientHeight ===
                 document.getElementById(_this.treeId).scrollHeight) {
-                  _this.todoMath();
-                  oldTime = nowTime;
+              _this.todoMath();
+              oldTime = nowTime;
             }
           }
         }
         document.getElementById(this.treeId).addEventListener('scroll', todoScoll(), false)
       },
-      /**
+      /*
      * 对节点进行计算，
      * 得到现在需要展示的数据,
      * 如果isExpand = true,则把子节点数算上
-     * */
+      */
       todoMath() {
         // 计算当前scrollTop，隐藏了几个节点
         // 往下拖动头顶溢出的不处理，只处理底部溢出的做懒加载
@@ -197,7 +199,7 @@
         max = null;
         hideNum = null;
       },
-      /**
+      /*
       * 节点点击事件，ev事件源，data节点数据
       * */
       nodeTap(ev, data) {
@@ -208,7 +210,7 @@
           this.todoMath();
         }
       },
-      /**
+      /*
       * 过滤事件
       * 如果用户有自定义传filter-method,那么使用该方法过滤，
       * 否则默认匹配节点的label
@@ -225,21 +227,21 @@
           this.filterable = false;
           // 找出store下filterData下checked节点
           let fArr = [];
-           this.filterAllData.forEach(x => {
+          this.filterAllData.forEach(x => {
             if (x.checked) fArr.push(x[this.nodeKey])
           })
           this.setCheckedKeys(fArr);
           fArr = null;
         }
       },
-      /**
+      /*
       * 递归所有节点children，留下匹配的
       * 默认对比所有children，因为children里面有可能有树节点，也有可能有最终的源数据
       * 可以通过filterMethod去判断过滤
       * */
       filterNodeChildren(arr, keywords) {
         arr.forEach(x => {
-          /**
+          /*
           * 判断如果当前节点children存在数据，
           * 那么肯定不是最终节点，并且也不会是当前层级的可用数据
           * */
@@ -259,14 +261,14 @@
           }
         })
       },
-      /**
+      /*
        * 设置checkedKey的方法
        * */
       setCheckedKeys(data) {
         if (!this.nodeKey) this.nodeKeyError();
         let isArray = data instanceof Array;
         if (!isArray) this.nodeKeyError("arguments should be Array but accepted " + `${typeof data}`);
-        /**
+        /*
          * setCheckedKeys方法里抽离的$set方法
          * */
         const setAttr = (obj, attr, boolean) => {
@@ -298,7 +300,7 @@
         }
         todoEach(this.data);
       },
-      /**
+      /*
        * 获取keys,或者node
        * 公共抽离方法
        * */
@@ -322,35 +324,35 @@
         todoFor(this.data);
         return res[type]
       },
-      /**
+      /*
        * 获取半选状态的节点key集合
        * */
       getHalfCheckedKeys() {
         if (!this.nodeKey) this.nodeKeyError();
         return this.getItemToArray('halfKeys');
       },
-      /**
+      /*
        * 获取选中状态的节点key集合
        * */
       getCheckedKeys() {
         if (!this.nodeKey) this.nodeKeyError();
         return this.getItemToArray('keys');
       },
-      /**
+      /*
        * 获取半选状态的节点data集合
        * */
       getHalfCheckedNodes() {
         if (!this.nodeKey) this.nodeKeyError();
         return this.getItemToArray('halfNodes');
       },
-      /**
+      /*
        * 获取选中状态的节点data集合
        * */
       getCheckedNodes() {
         if (!this.nodeKey) this.nodeKeyError();
         return this.getItemToArray('nodes');
       },
-      /**
+      /*
        * 没有设置node-key，调用跟node-key相关方法抛异常
        * */
       nodeKeyError(str) {
